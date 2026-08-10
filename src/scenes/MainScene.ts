@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import {
   type AnimalLayout,
   type AnimalSpeciesId,
+  type WelfareResult,
   ANIMAL_SPECIES,
   calculateWelfare,
   createAnimalLayout,
@@ -21,10 +22,15 @@ import {
 
 type Tool = ZooObjectType | AnimalSpeciesId | "erase";
 
+export const DETAILS_PANEL_HEIGHT = 130;
+
 const OBJECT_COLORS: Record<ZooObjectType, number> = {
   path: 0xc2b280,
   vegetation: 0x1f7a1f,
   habitat: 0x8b5a2b,
+  water: 0x2a6fb0,
+  shelter: 0x7a6a58,
+  enrichment: 0xb35fc2,
 };
 
 const ANIMAL_COLORS: Record<AnimalSpeciesId, number> = {
@@ -37,6 +43,9 @@ const TOOL_LABELS: Record<Tool, string> = {
   path: "Path",
   vegetation: "Vegetation",
   habitat: "Habitat",
+  water: "Water",
+  shelter: "Shelter",
+  enrichment: "Enrichment",
   lion: "Lion",
   elephant: "Elephant",
   tortoise: "Tortoise",
@@ -51,6 +60,7 @@ export class MainScene extends Phaser.Scene {
   private animalsGraphics!: Phaser.GameObjects.Graphics;
   private welfareTexts: Phaser.GameObjects.Text[] = [];
   private toolText!: Phaser.GameObjects.Text;
+  private detailsText!: Phaser.GameObjects.Text;
 
   constructor() {
     super("MainScene");
@@ -72,17 +82,28 @@ export class MainScene extends Phaser.Scene {
     });
     this.updateToolText();
 
+    this.detailsText = this.add.text(4, GRID_HEIGHT * CELL_SIZE + 4, "", {
+      fontSize: "12px",
+      color: "#ffffff",
+      lineSpacing: 4,
+    });
+
     this.input.keyboard?.on("keydown-ONE", () => this.selectTool("path"));
     this.input.keyboard?.on("keydown-TWO", () => this.selectTool("vegetation"));
     this.input.keyboard?.on("keydown-THREE", () => this.selectTool("habitat"));
     this.input.keyboard?.on("keydown-FOUR", () => this.selectTool("lion"));
     this.input.keyboard?.on("keydown-FIVE", () => this.selectTool("elephant"));
     this.input.keyboard?.on("keydown-SIX", () => this.selectTool("tortoise"));
+    this.input.keyboard?.on("keydown-SEVEN", () => this.selectTool("water"));
+    this.input.keyboard?.on("keydown-EIGHT", () => this.selectTool("shelter"));
+    this.input.keyboard?.on("keydown-NINE", () => this.selectTool("enrichment"));
     this.input.keyboard?.on("keydown-ZERO", () => this.selectTool("erase"));
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       this.handlePointerDown(pointer.x, pointer.y);
     });
+
+    this.renderAnimals();
   }
 
   private selectTool(tool: Tool): void {
@@ -92,8 +113,9 @@ export class MainScene extends Phaser.Scene {
 
   private updateToolText(): void {
     this.toolText.setText(
-      `Tool: ${TOOL_LABELS[this.selectedTool]}  ` +
-        "[1] Path [2] Vegetation [3] Habitat [4] Lion [5] Elephant [6] Tortoise [0] Erase",
+      `Tool: ${TOOL_LABELS[this.selectedTool]}\n` +
+        "[1] Path [2] Vegetation [3] Habitat [4] Lion [5] Elephant [6] Tortoise\n" +
+        "[7] Water [8] Shelter [9] Enrichment [0] Erase",
     );
   }
 
@@ -163,6 +185,7 @@ export class MainScene extends Phaser.Scene {
     }
     this.welfareTexts = [];
 
+    const summaryLines: string[] = [];
     const radius = CELL_SIZE / 2 - 10;
     for (const cell of createGridCells(GRID_WIDTH, GRID_HEIGHT)) {
       const speciesId = getAnimalAt(this.animals, cell);
@@ -188,6 +211,22 @@ export class MainScene extends Phaser.Scene {
       );
       text.setOrigin(0.5, 0.5);
       this.welfareTexts.push(text);
+
+      if (welfare) {
+        summaryLines.push(this.formatNeedsSummary(ANIMAL_SPECIES[speciesId].name, cell, welfare));
+      }
     }
+
+    this.detailsText.setText(
+      summaryLines.length > 0 ? summaryLines.join("\n") : "Place an animal on a habitat tile.",
+    );
+  }
+
+  private formatNeedsSummary(name: string, cell: { col: number; row: number }, welfare: WelfareResult): string {
+    const needParts = welfare.needs.map((need) => {
+      const label = `${need.need} ${need.actual}/${need.required}`;
+      return need.score < 100 ? `${label}!` : label;
+    });
+    return `${name} (${cell.col},${cell.row}) ${welfare.score}%  ${needParts.join("  ")}`;
   }
 }

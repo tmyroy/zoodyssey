@@ -1,6 +1,6 @@
 import type { GridCell } from "./grid";
 
-export type ZooObjectType = "path" | "vegetation" | "habitat";
+export type ZooObjectType = "path" | "vegetation" | "habitat" | "water" | "shelter" | "enrichment";
 
 export interface ZooLayout {
   width: number;
