@@ -20,6 +20,7 @@ import {
   startDraft,
 } from "../cards";
 import { CELL_SIZE, GRID_HEIGHT, GRID_WIDTH, createGridCells, getCellAtPosition } from "../grid";
+import { RUN_LENGTH_YEARS, type RunStatus, evaluateRun, isRunComplete } from "../run";
 import {
   type GameState,
   type YearResult,
@@ -37,7 +38,7 @@ import {
 } from "../zoo";
 
 type Tool = ZooObjectType | AnimalSpeciesId | "erase";
-type Phase = "draft" | "build" | "results";
+type Phase = "draft" | "build" | "results" | "run-complete";
 
 export const DETAILS_PANEL_HEIGHT = 130;
 
@@ -89,11 +90,6 @@ export class MainScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.layout = createZooLayout(GRID_WIDTH, GRID_HEIGHT);
-    this.animals = createAnimalLayout();
-    this.gameState = createInitialGameState();
-    this.draftState = createDraftState();
-
     this.drawGrid();
     this.objectsGraphics = this.add.graphics();
     this.animalsGraphics = this.add.graphics();
@@ -134,6 +130,16 @@ export class MainScene extends Phaser.Scene {
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       this.handlePointerDown(pointer.x, pointer.y);
     });
+
+    this.startNewRun();
+  }
+
+  private startNewRun(): void {
+    this.layout = createZooLayout(GRID_WIDTH, GRID_HEIGHT);
+    this.animals = createAnimalLayout();
+    this.gameState = createInitialGameState();
+    this.draftState = createDraftState();
+    this.lastResult = null;
 
     this.startYearDraft();
     this.updateToolText();
@@ -182,7 +188,14 @@ export class MainScene extends Phaser.Scene {
     } else if (this.phase === "results" && this.lastResult) {
       this.gameState = applyYearResult(this.gameState, this.lastResult);
       this.lastResult = null;
-      this.startYearDraft();
+      if (isRunComplete(this.gameState)) {
+        this.phase = "run-complete";
+      } else {
+        this.startYearDraft();
+      }
+    } else if (this.phase === "run-complete") {
+      this.startNewRun();
+      return;
     }
 
     this.updateToolText();
@@ -204,6 +217,11 @@ export class MainScene extends Phaser.Scene {
   }
 
   private updateToolText(): void {
+    if (this.phase === "run-complete") {
+      this.toolText.setText("Run complete\n[Enter] Start a new run");
+      return;
+    }
+
     if (this.phase === "results") {
       this.toolText.setText("Reviewing year-end results\n[Enter] Start next year");
       return;
@@ -345,12 +363,24 @@ export class MainScene extends Phaser.Scene {
   }
 
   private formatDetailsPanel(needsSummaryLines: string[]): string {
+    if (this.phase === "run-complete") {
+      return this.formatRunSummary(evaluateRun(this.gameState));
+    }
     if (this.phase === "results" && this.lastResult) {
       return this.formatYearSummary(this.lastResult);
     }
     return needsSummaryLines.length > 0
       ? needsSummaryLines.join("\n")
       : "Place an animal on a habitat tile.";
+  }
+
+  private formatRunSummary(status: RunStatus): string {
+    const outcome = status === "success" ? "Success!" : "The zoo did not make it.";
+    return (
+      `Run complete after ${RUN_LENGTH_YEARS} years — ${outcome}\n` +
+      `Final money $${this.gameState.money}, research ${this.gameState.research}, ` +
+      `conservation ${this.gameState.conservation}`
+    );
   }
 
   private formatYearSummary(result: YearResult): string {
