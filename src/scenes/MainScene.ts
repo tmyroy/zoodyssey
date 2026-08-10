@@ -108,6 +108,7 @@ export class MainScene extends Phaser.Scene {
       color: "#ffffff",
       backgroundColor: "#000000aa",
       padding: { x: 4, y: 2 },
+      wordWrap: { width: GRID_WIDTH * CELL_SIZE - 8 },
     });
 
     this.hudText = this.add.text(GRID_WIDTH * CELL_SIZE - 180, 4, "", {
@@ -122,6 +123,7 @@ export class MainScene extends Phaser.Scene {
       fontSize: "12px",
       color: "#ffffff",
       lineSpacing: 4,
+      wordWrap: { width: GRID_WIDTH * CELL_SIZE - 8 },
     });
 
     this.input.keyboard?.on("keydown-ONE", () => this.handleNumberKey(0, "path"));
@@ -287,8 +289,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   private updateHud(): void {
+    const year = Math.min(this.gameState.year, RUN_LENGTH_YEARS);
     this.hudText.setText(
-      `Year ${this.gameState.year}\n` +
+      `Year ${year} / ${RUN_LENGTH_YEARS}\n` +
         `Money $${this.gameState.money}\n` +
         `Research ${this.gameState.research}\n` +
         `Conservation ${this.gameState.conservation}`,
@@ -409,9 +412,18 @@ export class MainScene extends Phaser.Scene {
     if (this.phase === "results" && this.lastResult) {
       return this.formatYearSummary(this.lastResult);
     }
-    return needsSummaryLines.length > 0
-      ? needsSummaryLines.join("\n")
-      : "Place an animal on a habitat tile.";
+    if (needsSummaryLines.length === 0) {
+      return "Place an animal on a habitat tile.";
+    }
+    return [this.formatZooWelfareSummary(), ...needsSummaryLines].join("\n");
+  }
+
+  private formatZooWelfareSummary(): string {
+    const scores = createGridCells(GRID_WIDTH, GRID_HEIGHT)
+      .map((cell) => calculateWelfare(this.layout, this.animals, cell)?.score)
+      .filter((score): score is number => score !== undefined);
+    const average = Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+    return `Zoo average welfare: ${average}% across ${scores.length} animal${scores.length === 1 ? "" : "s"}`;
   }
 
   private formatRunSummary(status: RunStatus): string {
@@ -424,10 +436,14 @@ export class MainScene extends Phaser.Scene {
   }
 
   private formatYearSummary(result: YearResult): string {
+    const nextMoney = this.gameState.money + result.income;
+    const nextResearch = this.gameState.research + result.researchGained;
+    const nextConservation = this.gameState.conservation + result.conservationGained;
     return (
       `Year ${result.year} results: ${result.visitors} visitors, ` +
       `income $${result.income}, average welfare ${result.averageWelfare}%\n` +
-      `+${result.researchGained} research, +${result.conservationGained} conservation`
+      `+${result.researchGained} research, +${result.conservationGained} conservation\n` +
+      `Money will become $${nextMoney}, research ${nextResearch}, conservation ${nextConservation}`
     );
   }
 
