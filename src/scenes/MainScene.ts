@@ -125,6 +125,7 @@ export class MainScene extends Phaser.Scene {
   private isYearZeroDraft = false;
   private lastResult: YearResult | null = null;
   private selectedTool: Tool = "path";
+  private paused = false;
 
   private objectsGraphics!: Phaser.GameObjects.Graphics;
   private animalsGraphics!: Phaser.GameObjects.Graphics;
@@ -138,6 +139,11 @@ export class MainScene extends Phaser.Scene {
   private toolButtons = new Map<Tool, Button>();
   private upgradeButtons = new Map<UpgradeId, Button>();
 
+  private pauseOverlay!: Phaser.GameObjects.Rectangle;
+  private pausePanel!: Phaser.GameObjects.Rectangle;
+  private pauseTitle!: Phaser.GameObjects.Text;
+  private pauseMenuButtons: Button[] = [];
+
   constructor() {
     super("MainScene");
   }
@@ -150,7 +156,7 @@ export class MainScene extends Phaser.Scene {
     this.topBarText = this.add.text(8, 8, "", {
       fontSize: "14px",
       color: "#ffffff",
-      wordWrap: { width: CANVAS_WIDTH - 200 },
+      wordWrap: { width: CANVAS_WIDTH - 270 },
     });
 
     this.hudText = this.add.text(CANVAS_WIDTH - 180, 4, "", {
@@ -160,6 +166,8 @@ export class MainScene extends Phaser.Scene {
       padding: { x: 4, y: 2 },
       align: "right",
     });
+
+    this.createButton(CANVAS_WIDTH - 258, 4, 70, 28, "Pause", () => this.togglePause());
 
     const detailsWidth = GRID_WIDTH * CELL_SIZE - 150 - 24;
     this.detailsText = this.add.text(GRID_ORIGIN_X + 8, GRID_ORIGIN_Y + GRID_HEIGHT * CELL_SIZE + 10, "", {
@@ -179,6 +187,7 @@ export class MainScene extends Phaser.Scene {
     );
 
     this.buildSideMenu();
+    this.buildPauseMenu();
     this.bindKeyboard();
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -188,7 +197,86 @@ export class MainScene extends Phaser.Scene {
     this.startNewRun();
   }
 
+  private buildPauseMenu(): void {
+    this.pauseOverlay = this.add
+      .rectangle(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, 0x000000, 0.7)
+      .setOrigin(0, 0)
+      .setDepth(1000)
+      .setVisible(false);
+
+    const panelWidth = 260;
+    const panelHeight = 300;
+    const panelX = CANVAS_WIDTH / 2 - panelWidth / 2;
+    const panelY = CANVAS_HEIGHT / 2 - panelHeight / 2;
+
+    this.pausePanel = this.add
+      .rectangle(panelX, panelY, panelWidth, panelHeight, 0x2a2a2a, 1)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, 0x666666)
+      .setDepth(1001)
+      .setVisible(false);
+
+    this.pauseTitle = this.add
+      .text(CANVAS_WIDTH / 2, panelY + 26, "Paused", { fontSize: "20px", color: "#ffffff" })
+      .setOrigin(0.5, 0.5)
+      .setDepth(1002)
+      .setVisible(false);
+
+    const buttonWidth = panelWidth - 40;
+    const buttonX = panelX + 20;
+    let y = panelY + 60;
+
+    const entries: { label: string; onClick: () => void; enabled: boolean }[] = [
+      { label: "Resume", onClick: () => this.togglePause(), enabled: true },
+      { label: "Restart Game", onClick: () => this.handleRestart(), enabled: true },
+      { label: "Save Game", onClick: () => {}, enabled: false },
+      { label: "Load Game", onClick: () => {}, enabled: false },
+      { label: "Settings", onClick: () => {}, enabled: false },
+    ];
+
+    for (const entry of entries) {
+      const button = this.createButton(buttonX, y, buttonWidth, BUTTON_HEIGHT + 10, entry.label, entry.onClick);
+      button.bg.setDepth(1002).setVisible(false);
+      button.label.setDepth(1003).setVisible(false);
+      if (!entry.enabled) {
+        button.bg.disableInteractive();
+        button.bg.setFillStyle(0x1a1a1a, 1);
+        button.label.setColor("#666666");
+        button.label.setText(`${entry.label} (coming soon)`);
+      }
+      this.pauseMenuButtons.push(button);
+      y += BUTTON_HEIGHT + 10 + 10;
+    }
+  }
+
+  private togglePause(): void {
+    this.setPauseVisible(!this.paused);
+  }
+
+  private handleRestart(): void {
+    this.setPauseVisible(false);
+    this.startNewRun();
+  }
+
+  private setPauseVisible(visible: boolean): void {
+    this.paused = visible;
+    this.pauseOverlay.setVisible(visible);
+    this.pausePanel.setVisible(visible);
+    this.pauseTitle.setVisible(visible);
+    for (const button of this.pauseMenuButtons) {
+      button.bg.setVisible(visible);
+      button.label.setVisible(visible);
+    }
+
+    if (visible) {
+      this.pauseOverlay.setInteractive({ useHandCursor: false });
+    } else {
+      this.pauseOverlay.disableInteractive();
+    }
+  }
+
   private bindKeyboard(): void {
+    this.input.keyboard?.on("keydown-ESC", () => this.togglePause());
     this.input.keyboard?.on("keydown-ONE", () => this.handleNumberKey(0, "path"));
     this.input.keyboard?.on("keydown-TWO", () => this.handleNumberKey(1, "vegetation"));
     this.input.keyboard?.on("keydown-THREE", () => this.handleNumberKey(2, "habitat"));
@@ -297,6 +385,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   private handleDraftPick(offerIndex: number): void {
+    if (this.paused) {
+      return;
+    }
     const card = this.draftState.offer[offerIndex];
     if (!card) {
       return;
@@ -322,7 +413,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private selectTool(tool: Tool): void {
-    if (this.phase !== "build") {
+    if (this.paused || this.phase !== "build") {
       return;
     }
     this.selectedTool = tool;
@@ -330,7 +421,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private purchaseUpgrade(id: UpgradeId): void {
-    if (this.phase !== "build") {
+    if (this.paused || this.phase !== "build") {
       return;
     }
     const result = purchaseUpgrade(this.researchState, this.gameState, id);
@@ -347,6 +438,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   private handleEnter(): void {
+    if (this.paused) {
+      return;
+    }
     if (this.phase === "build") {
       this.lastResult = simulateYear(this.gameState, this.layout, this.animals, this.researchState);
       this.phase = "results";
@@ -384,7 +478,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private handlePointerDown(x: number, y: number): void {
-    if (this.phase !== "build") {
+    if (this.paused || this.phase !== "build") {
       return;
     }
 
