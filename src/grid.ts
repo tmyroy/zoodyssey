@@ -16,3 +16,17 @@ export function createGridCells(width: number, height: number): GridCell[] {
   }
   return cells;
 }
+
+export function getCellAtPosition(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): GridCell | null {
+  const col = Math.floor(x / CELL_SIZE);
+  const row = Math.floor(y / CELL_SIZE);
+  if (col < 0 || col >= width || row < 0 || row >= height) {
+    return null;
+  }
+  return { col, row };
+}
