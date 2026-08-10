@@ -11,6 +11,7 @@ import {
   removeAnimal,
 } from "../animals";
 import {
+  type Card,
   type DraftState,
   createDraftState,
   isFeatureUnlocked,
@@ -20,6 +21,7 @@ import {
   startYearZeroDraft,
 } from "../cards";
 import { type GridCell, CELL_SIZE, GRID_HEIGHT, GRID_WIDTH, createGridCells, getCellAtPosition } from "../grid";
+import { drawAnimalIcon, drawTileIcon } from "./icons";
 import {
   type ResearchState,
   type UpgradeId,
@@ -110,6 +112,7 @@ const SIDE_MENU_TOOLS: Tool[] = [
 interface Button {
   bg: Phaser.GameObjects.Rectangle;
   label: Phaser.GameObjects.Text;
+  swatch?: Phaser.GameObjects.Rectangle;
 }
 
 export class MainScene extends Phaser.Scene {
@@ -209,6 +212,7 @@ export class MainScene extends Phaser.Scene {
     height: number,
     label: string,
     onClick: () => void,
+    swatchColor?: number,
   ): Button {
     const bg = this.add
       .rectangle(x, y, width, height, 0x3a3a3a, 1)
@@ -216,6 +220,11 @@ export class MainScene extends Phaser.Scene {
       .setStrokeStyle(1, 0x666666)
       .setInteractive({ useHandCursor: true });
     bg.on("pointerdown", onClick);
+
+    const swatch =
+      swatchColor !== undefined
+        ? this.add.rectangle(x + 5, y + 5, 10, 10, swatchColor, 1).setOrigin(0, 0).setStrokeStyle(1, 0x000000)
+        : undefined;
 
     const text = this.add
       .text(x + width / 2, y + height / 2, label, {
@@ -226,7 +235,14 @@ export class MainScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0.5);
 
-    return { bg, label: text };
+    return { bg, label: text, swatch };
+  }
+
+  private swatchColorForTool(tool: Tool): number | undefined {
+    if (tool === "erase") {
+      return undefined;
+    }
+    return this.isAnimalTool(tool) ? ANIMAL_COLORS[tool] : OBJECT_COLORS[tool];
   }
 
   private buildSideMenu(): void {
@@ -235,7 +251,15 @@ export class MainScene extends Phaser.Scene {
     let y = GRID_ORIGIN_Y + 8;
 
     for (const tool of SIDE_MENU_TOOLS) {
-      const button = this.createButton(x, y, width, BUTTON_HEIGHT, "", () => this.selectTool(tool));
+      const button = this.createButton(
+        x,
+        y,
+        width,
+        BUTTON_HEIGHT,
+        "",
+        () => this.selectTool(tool),
+        this.swatchColorForTool(tool),
+      );
       this.toolButtons.set(tool, button);
       y += BUTTON_HEIGHT + BUTTON_GAP;
     }
@@ -412,7 +436,6 @@ export class MainScene extends Phaser.Scene {
   private renderObjects(): void {
     this.objectsGraphics.clear();
 
-    const inset = 6;
     for (const cell of createGridCells(GRID_WIDTH, GRID_HEIGHT)) {
       const type = getObjectAt(this.layout, cell);
       if (!type) {
@@ -420,13 +443,7 @@ export class MainScene extends Phaser.Scene {
       }
 
       const { x, y } = this.cellPixel(cell);
-      this.objectsGraphics.fillStyle(OBJECT_COLORS[type], 1);
-      this.objectsGraphics.fillRect(
-        x + inset,
-        y + inset,
-        CELL_SIZE - inset * 2,
-        CELL_SIZE - inset * 2,
-      );
+      drawTileIcon(this.objectsGraphics, type, x, y);
     }
   }
 
@@ -448,20 +465,16 @@ export class MainScene extends Phaser.Scene {
       const { x: cellX, y: cellY } = this.cellPixel(cell);
       const centerX = cellX + CELL_SIZE / 2;
       const centerY = cellY + CELL_SIZE / 2;
-      this.animalsGraphics.fillStyle(ANIMAL_COLORS[speciesId], 1);
-      this.animalsGraphics.fillCircle(centerX, centerY, radius);
+      drawAnimalIcon(this.animalsGraphics, speciesId, centerX, centerY, radius);
 
       const welfare = calculateWelfare(this.layout, this.animals, cell);
-      const text = this.add.text(
-        centerX,
-        centerY,
-        `${ANIMAL_SPECIES[speciesId].name[0]}\n${welfare?.score ?? 0}`,
-        {
-          fontSize: "11px",
-          color: "#ffffff",
-          align: "center",
-        },
-      );
+      const text = this.add.text(centerX, centerY + radius + 8, `${welfare?.score ?? 0}%`, {
+        fontSize: "11px",
+        color: "#ffffff",
+        align: "center",
+        backgroundColor: "#000000aa",
+        padding: { x: 3, y: 1 },
+      });
       text.setOrigin(0.5, 0.5);
       this.welfareTexts.push(text);
 
@@ -527,6 +540,7 @@ export class MainScene extends Phaser.Scene {
     for (const button of this.cardButtons) {
       button.bg.destroy();
       button.label.destroy();
+      button.swatch?.destroy();
     }
     this.cardButtons = [];
   }
@@ -569,9 +583,16 @@ export class MainScene extends Phaser.Scene {
         cardHeight,
         `${card.name}\n${card.description}`,
         () => this.handleDraftPick(index),
+        this.swatchColorForCard(card),
       );
       this.cardButtons.push(button);
     });
+  }
+
+  private swatchColorForCard(card: Card): number {
+    return card.type === "animal"
+      ? ANIMAL_COLORS[card.unlocks as AnimalSpeciesId]
+      : OBJECT_COLORS[card.unlocks as ZooObjectType];
   }
 
   private actionButtonLabel(): string {
