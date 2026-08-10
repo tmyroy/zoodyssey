@@ -1,29 +1,65 @@
 import type { GridCell } from "./grid";
-import { type ZooLayout, getObjectAt } from "./zoo";
+import { type ZooLayout, type ZooObjectType, getObjectAt } from "./zoo";
 
 export type AnimalSpeciesId = "lion" | "elephant" | "tortoise";
+
+export type NeedKey = "space" | "vegetation" | "water" | "shelter" | "enrichment";
+
+export type HabitatNeeds = Record<NeedKey, number>;
 
 export interface AnimalSpecies {
   id: AnimalSpeciesId;
   name: string;
-  minHabitatSize: number;
-  minVegetation: number;
+  // Minimum amount of each need for a fully satisfied habitat.
+  requirements: HabitatNeeds;
+  // Relative importance of each need to this species' overall welfare (weights sum to 100).
+  weights: HabitatNeeds;
 }
 
 export const ANIMAL_SPECIES: Record<AnimalSpeciesId, AnimalSpecies> = {
-  lion: { id: "lion", name: "Lion", minHabitatSize: 6, minVegetation: 2 },
-  elephant: { id: "elephant", name: "Elephant", minHabitatSize: 10, minVegetation: 3 },
-  tortoise: { id: "tortoise", name: "Tortoise", minHabitatSize: 4, minVegetation: 1 },
+  lion: {
+    id: "lion",
+    name: "Lion",
+    requirements: { space: 6, vegetation: 1, water: 1, shelter: 2, enrichment: 2 },
+    weights: { space: 35, vegetation: 10, water: 15, shelter: 20, enrichment: 20 },
+  },
+  elephant: {
+    id: "elephant",
+    name: "Elephant",
+    requirements: { space: 10, vegetation: 2, water: 3, shelter: 1, enrichment: 2 },
+    weights: { space: 30, vegetation: 15, water: 30, shelter: 10, enrichment: 15 },
+  },
+  tortoise: {
+    id: "tortoise",
+    name: "Tortoise",
+    requirements: { space: 4, vegetation: 2, water: 1, shelter: 2, enrichment: 1 },
+    weights: { space: 20, vegetation: 20, water: 10, shelter: 35, enrichment: 15 },
+  },
+};
+
+// Tile type that satisfies each need, other than "space" which is the habitat enclosure itself.
+const NEED_OBJECT_TYPE: Record<Exclude<NeedKey, "space">, ZooObjectType> = {
+  vegetation: "vegetation",
+  water: "water",
+  shelter: "shelter",
+  enrichment: "enrichment",
 };
 
 export interface AnimalLayout {
   animals: Map<string, AnimalSpeciesId>;
 }
 
+export interface NeedBreakdown {
+  need: NeedKey;
+  required: number;
+  actual: number;
+  weight: number;
+  score: number;
+}
+
 export interface WelfareResult {
   score: number;
-  habitatSize: number;
-  vegetationCount: number;
+  needs: NeedBreakdown[];
 }
 
 function cellKey(cell: GridCell): string {
@@ -97,9 +133,9 @@ function getHabitatEnclosure(zoo: ZooLayout, start: GridCell): GridCell[] {
   return enclosure;
 }
 
-function countBorderingVegetation(zoo: ZooLayout, enclosure: GridCell[]): number {
+function countBorderingType(zoo: ZooLayout, enclosure: GridCell[], type: ZooObjectType): number {
   const enclosureKeys = new Set(enclosure.map(cellKey));
-  const vegetationCells = new Set<string>();
+  const matchingCells = new Set<string>();
 
   for (const cell of enclosure) {
     for (const neighbor of neighborsOf(cell)) {
@@ -107,13 +143,13 @@ function countBorderingVegetation(zoo: ZooLayout, enclosure: GridCell[]): number
       if (enclosureKeys.has(key)) {
         continue;
       }
-      if (getObjectAt(zoo, neighbor) === "vegetation") {
-        vegetationCells.add(key);
+      if (getObjectAt(zoo, neighbor) === type) {
+        matchingCells.add(key);
       }
     }
   }
 
-  return vegetationCells.size;
+  return matchingCells.size;
 }
 
 function needScore(actual: number, required: number): number {
@@ -135,11 +171,26 @@ export function calculateWelfare(
 
   const species = ANIMAL_SPECIES[speciesId];
   const enclosure = getHabitatEnclosure(zoo, cell);
-  const vegetationCount = countBorderingVegetation(zoo, enclosure);
 
-  const spaceScore = needScore(enclosure.length, species.minHabitatSize);
-  const vegetationScore = needScore(vegetationCount, species.minVegetation);
-  const score = Math.round((spaceScore + vegetationScore) / 2);
+  const actuals: HabitatNeeds = {
+    space: enclosure.length,
+    vegetation: countBorderingType(zoo, enclosure, NEED_OBJECT_TYPE.vegetation),
+    water: countBorderingType(zoo, enclosure, NEED_OBJECT_TYPE.water),
+    shelter: countBorderingType(zoo, enclosure, NEED_OBJECT_TYPE.shelter),
+    enrichment: countBorderingType(zoo, enclosure, NEED_OBJECT_TYPE.enrichment),
+  };
 
-  return { score, habitatSize: enclosure.length, vegetationCount };
+  const needs: NeedBreakdown[] = (Object.keys(actuals) as NeedKey[]).map((need) => ({
+    need,
+    required: species.requirements[need],
+    actual: actuals[need],
+    weight: species.weights[need],
+    score: needScore(actuals[need], species.requirements[need]),
+  }));
+
+  const totalWeight = needs.reduce((sum, n) => sum + n.weight, 0);
+  const weightedScore =
+    totalWeight === 0 ? 100 : needs.reduce((sum, n) => sum + n.score * n.weight, 0) / totalWeight;
+
+  return { score: Math.round(weightedScore), needs };
 }
