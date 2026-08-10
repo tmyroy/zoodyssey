@@ -1,67 +1,119 @@
 [
-  { "id": "animal-lion", "type": "animal", "name": "Lion", "description": "Unlocks the lion.", "unlocks": "lion" },
+  {
+    "id": "animal-lion",
+    "type": "animal",
+    "name": "Lion",
+    "description": "Unlocks the lion.",
+    "unlocks": "lion",
+    "cost": 5,
+    "repeatable": false
+  },
   {
     "id": "animal-elephant",
     "type": "animal",
     "name": "Elephant",
     "description": "Unlocks the elephant.",
-    "unlocks": "elephant"
+    "unlocks": "elephant",
+    "cost": 6,
+    "repeatable": false
   },
   {
     "id": "animal-tortoise",
     "type": "animal",
     "name": "Tortoise",
     "description": "Unlocks the tortoise.",
-    "unlocks": "tortoise"
+    "unlocks": "tortoise",
+    "cost": 3,
+    "repeatable": false
   },
   {
     "id": "animal-giraffe",
     "type": "animal",
     "name": "Giraffe",
     "description": "Unlocks the giraffe.",
-    "unlocks": "giraffe"
+    "unlocks": "giraffe",
+    "cost": 5,
+    "repeatable": false
   },
   {
     "id": "animal-penguin",
     "type": "animal",
     "name": "Penguin",
     "description": "Unlocks the penguin.",
-    "unlocks": "penguin"
+    "unlocks": "penguin",
+    "cost": 4,
+    "repeatable": false
   },
-  { "id": "animal-bear", "type": "animal", "name": "Bear", "description": "Unlocks the bear.", "unlocks": "bear" },
+  {
+    "id": "animal-bear",
+    "type": "animal",
+    "name": "Bear",
+    "description": "Unlocks the bear.",
+    "unlocks": "bear",
+    "cost": 5,
+    "repeatable": false
+  },
   {
     "id": "animal-zebra",
     "type": "animal",
     "name": "Zebra",
     "description": "Unlocks the zebra.",
-    "unlocks": "zebra"
+    "unlocks": "zebra",
+    "cost": 4,
+    "repeatable": false
+  },
+  {
+    "id": "feature-path",
+    "type": "feature",
+    "name": "Path",
+    "description": "Places a path tile.",
+    "unlocks": "path",
+    "cost": 1,
+    "repeatable": true
+  },
+  {
+    "id": "feature-habitat",
+    "type": "feature",
+    "name": "Habitat",
+    "description": "Places a habitat tile.",
+    "unlocks": "habitat",
+    "cost": 2,
+    "repeatable": true
   },
   {
     "id": "feature-vegetation",
     "type": "feature",
     "name": "Vegetation",
-    "description": "Unlocks vegetation tiles.",
-    "unlocks": "vegetation"
+    "description": "Places a vegetation tile.",
+    "unlocks": "vegetation",
+    "cost": 1,
+    "repeatable": true
   },
   {
     "id": "feature-water",
     "type": "feature",
     "name": "Water Feature",
-    "description": "Unlocks water tiles.",
-    "unlocks": "water"
+    "description": "Places a water tile.",
+    "unlocks": "water",
+    "cost": 2,
+    "repeatable": true
   },
   {
     "id": "feature-shelter",
     "type": "feature",
     "name": "Shelter",
-    "description": "Unlocks shelter tiles.",
-    "unlocks": "shelter"
+    "description": "Places a shelter tile.",
+    "unlocks": "shelter",
+    "cost": 2,
+    "repeatable": true
   },
   {
     "id": "feature-enrichment",
     "type": "feature",
     "name": "Enrichment",
-    "description": "Unlocks enrichment tiles.",
-    "unlocks": "enrichment"
+    "description": "Places an enrichment tile.",
+    "unlocks": "enrichment",
+    "cost": 2,
+    "repeatable": true
   }
 ]
