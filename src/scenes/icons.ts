@@ -1,7 +1,7 @@
 import type Phaser from "phaser";
-import type { AnimalSpeciesId } from "../animals";
-import { CELL_SIZE } from "../grid";
-import type { ZooObjectType } from "../zoo";
+import type { AnimalSpeciesId } from "../game/animals";
+import { CELL_SIZE } from "../game/grid";
+import type { ZooObjectType } from "../game/zoo";
 
 // Simple procedural placeholder icons, drawn with Phaser primitives so the
 // prototype doesn't depend on external art assets. Each tile/animal gets a

@@ -9,7 +9,7 @@ import {
   getAnimalAt,
   placeAnimal,
   removeAnimal,
-} from "../animals";
+} from "../game/animals";
 import {
   type Card,
   type DraftState,
@@ -19,8 +19,8 @@ import {
   pickCard,
   startDraft,
   startYearZeroDraft,
-} from "../cards";
-import { type GridCell, CELL_SIZE, GRID_HEIGHT, GRID_WIDTH, createGridCells, getCellAtPosition } from "../grid";
+} from "../game/cards";
+import { type GridCell, CELL_SIZE, GRID_HEIGHT, GRID_WIDTH, createGridCells, getCellAtPosition } from "../game/grid";
 import { drawAnimalIcon, drawTileIcon } from "./icons";
 import {
   type ResearchState,
@@ -30,15 +30,15 @@ import {
   createResearchState,
   isUpgradePurchased,
   purchaseUpgrade,
-} from "../research";
-import { RUN_LENGTH_YEARS, type RunStatus, evaluateRun, isRunComplete } from "../run";
+} from "../game/research";
+import { RUN_LENGTH_YEARS, type RunStatus, evaluateRun, isRunComplete } from "../game/run";
 import {
   type GameState,
   type YearResult,
   applyYearResult,
   createInitialGameState,
   simulateYear,
-} from "../simulation";
+} from "../game/simulation";
 import {
   type ZooLayout,
   type ZooObjectType,
@@ -46,7 +46,7 @@ import {
   getObjectAt,
   placeObject,
   removeObject,
-} from "../zoo";
+} from "../game/zoo";
 
 type Tool = ZooObjectType | AnimalSpeciesId | "erase";
 type Phase = "draft" | "build" | "results" | "run-complete";
