@@ -17,6 +17,7 @@ import {
   isSpeciesUnlocked,
   pickCard,
   startDraft,
+  startYearZeroDraft,
 } from "../cards";
 import { type GridCell, CELL_SIZE, GRID_HEIGHT, GRID_WIDTH, createGridCells, getCellAtPosition } from "../grid";
 import {
@@ -118,6 +119,7 @@ export class MainScene extends Phaser.Scene {
   private draftState!: DraftState;
   private researchState!: ResearchState;
   private phase: Phase = "draft";
+  private isYearZeroDraft = false;
   private lastResult: YearResult | null = null;
   private selectedTool: Tool = "path";
 
@@ -256,7 +258,7 @@ export class MainScene extends Phaser.Scene {
     this.researchState = createResearchState();
     this.lastResult = null;
 
-    this.startYearDraft();
+    this.runYearZeroDraft();
     this.refresh();
   }
 
@@ -276,11 +278,21 @@ export class MainScene extends Phaser.Scene {
       return;
     }
     this.draftState = pickCard(this.draftState, card.id);
-    this.phase = "build";
+    // The draft continues if pickCard left cards on offer (Year 0's
+    // multi-pick draft); otherwise move on to the build phase.
+    this.phase = this.draftState.offer.length > 0 ? "draft" : "build";
     this.refresh();
   }
 
+  // The one-time Year 0 draft: a bigger offer, multiple picks, before Year 1 begins.
+  private runYearZeroDraft(): void {
+    this.isYearZeroDraft = true;
+    this.draftState = startYearZeroDraft(this.draftState);
+    this.phase = this.draftState.offer.length > 0 ? "draft" : "build";
+  }
+
   private startYearDraft(): void {
+    this.isYearZeroDraft = false;
     this.draftState = startDraft(this.draftState);
     this.phase = this.draftState.offer.length > 0 ? "draft" : "build";
   }
@@ -463,12 +475,21 @@ export class MainScene extends Phaser.Scene {
 
   private updateTopBar(): void {
     const labels: Record<Phase, string> = {
-      draft: `Year ${this.gameState.year} — choose a discovery below`,
+      draft: this.formatDraftStatus(),
       build: `Tool: ${this.toolLabel(this.selectedTool)} — click the grid to build, then Open Zoo`,
       results: "Reviewing year-end results",
       "run-complete": "Run complete",
     };
     this.topBarText.setText(labels[this.phase]);
+  }
+
+  private formatDraftStatus(): string {
+    const remaining = this.draftState.picksRemaining;
+    const cards = remaining === 1 ? "card" : "cards";
+    if (this.isYearZeroDraft) {
+      return `Year 0 — build your opening hand: choose ${remaining} more ${cards}`;
+    }
+    return `Year ${this.gameState.year} — choose a discovery below`;
   }
 
   private updateHud(): void {
@@ -528,11 +549,16 @@ export class MainScene extends Phaser.Scene {
   }
 
   private renderDraftCards(): void {
-    const cardWidth = 150;
     const cardHeight = BOTTOM_BAR_HEIGHT - 20;
-    const gap = 14;
+    const gap = 10;
     const startX = GRID_ORIGIN_X + 8;
     const y = GRID_ORIGIN_Y + GRID_HEIGHT * CELL_SIZE + 10;
+    const availableWidth = GRID_WIDTH * CELL_SIZE - 16;
+
+    const count = this.draftState.offer.length;
+    // Shrink cards to fit whenever the offer (e.g. Year 0's bigger draft)
+    // would otherwise overflow the bottom bar.
+    const cardWidth = Math.min(150, (availableWidth - gap * (count - 1)) / count);
 
     this.draftState.offer.forEach((card, index) => {
       const x = startX + index * (cardWidth + gap);
