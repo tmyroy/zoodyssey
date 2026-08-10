@@ -10,6 +10,15 @@ import {
   placeAnimal,
   removeAnimal,
 } from "../animals";
+import {
+  type Card,
+  type DraftState,
+  createDraftState,
+  isFeatureUnlocked,
+  isSpeciesUnlocked,
+  pickCard,
+  startDraft,
+} from "../cards";
 import { CELL_SIZE, GRID_HEIGHT, GRID_WIDTH, createGridCells, getCellAtPosition } from "../grid";
 import {
   type GameState,
@@ -28,7 +37,7 @@ import {
 } from "../zoo";
 
 type Tool = ZooObjectType | AnimalSpeciesId | "erase";
-type Phase = "build" | "results";
+type Phase = "draft" | "build" | "results";
 
 export const DETAILS_PANEL_HEIGHT = 130;
 
@@ -64,7 +73,8 @@ export class MainScene extends Phaser.Scene {
   private layout!: ZooLayout;
   private animals!: AnimalLayout;
   private gameState!: GameState;
-  private phase: Phase = "build";
+  private draftState!: DraftState;
+  private phase: Phase = "draft";
   private lastResult: YearResult | null = null;
   private selectedTool: Tool = "path";
   private objectsGraphics!: Phaser.GameObjects.Graphics;
@@ -82,6 +92,7 @@ export class MainScene extends Phaser.Scene {
     this.layout = createZooLayout(GRID_WIDTH, GRID_HEIGHT);
     this.animals = createAnimalLayout();
     this.gameState = createInitialGameState();
+    this.draftState = createDraftState();
 
     this.drawGrid();
     this.objectsGraphics = this.add.graphics();
@@ -108,9 +119,9 @@ export class MainScene extends Phaser.Scene {
       lineSpacing: 4,
     });
 
-    this.input.keyboard?.on("keydown-ONE", () => this.selectTool("path"));
-    this.input.keyboard?.on("keydown-TWO", () => this.selectTool("vegetation"));
-    this.input.keyboard?.on("keydown-THREE", () => this.selectTool("habitat"));
+    this.input.keyboard?.on("keydown-ONE", () => this.handleNumberKey(0, "path"));
+    this.input.keyboard?.on("keydown-TWO", () => this.handleNumberKey(1, "vegetation"));
+    this.input.keyboard?.on("keydown-THREE", () => this.handleNumberKey(2, "habitat"));
     this.input.keyboard?.on("keydown-FOUR", () => this.selectTool("lion"));
     this.input.keyboard?.on("keydown-FIVE", () => this.selectTool("elephant"));
     this.input.keyboard?.on("keydown-SIX", () => this.selectTool("tortoise"));
@@ -124,9 +135,36 @@ export class MainScene extends Phaser.Scene {
       this.handlePointerDown(pointer.x, pointer.y);
     });
 
+    this.startYearDraft();
     this.updateToolText();
     this.updateHud();
     this.renderAnimals();
+  }
+
+  // Keys 1-3 pick a draft card during the draft phase, or select a build
+  // tool otherwise.
+  private handleNumberKey(offerIndex: number, buildTool: Tool): void {
+    if (this.phase === "draft") {
+      this.handleDraftPick(offerIndex);
+    } else {
+      this.selectTool(buildTool);
+    }
+  }
+
+  private handleDraftPick(offerIndex: number): void {
+    const card = this.draftState.offer[offerIndex];
+    if (!card) {
+      return;
+    }
+    this.draftState = pickCard(this.draftState, card.id);
+    this.phase = "build";
+    this.updateToolText();
+    this.updateHud();
+  }
+
+  private startYearDraft(): void {
+    this.draftState = startDraft(this.draftState);
+    this.phase = this.draftState.offer.length > 0 ? "draft" : "build";
   }
 
   private selectTool(tool: Tool): void {
@@ -141,15 +179,28 @@ export class MainScene extends Phaser.Scene {
     if (this.phase === "build") {
       this.lastResult = simulateYear(this.gameState, this.layout, this.animals);
       this.phase = "results";
-    } else if (this.lastResult) {
+    } else if (this.phase === "results" && this.lastResult) {
       this.gameState = applyYearResult(this.gameState, this.lastResult);
       this.lastResult = null;
-      this.phase = "build";
+      this.startYearDraft();
     }
 
     this.updateToolText();
     this.updateHud();
     this.renderAnimals();
+  }
+
+  private isUnlocked(tool: Tool): boolean {
+    if (tool === "erase") {
+      return true;
+    }
+    return this.isAnimalTool(tool)
+      ? isSpeciesUnlocked(this.draftState, tool)
+      : isFeatureUnlocked(this.draftState, tool);
+  }
+
+  private toolLabel(tool: Tool): string {
+    return this.isUnlocked(tool) ? TOOL_LABELS[tool] : `${TOOL_LABELS[tool]} (locked)`;
   }
 
   private updateToolText(): void {
@@ -158,11 +209,23 @@ export class MainScene extends Phaser.Scene {
       return;
     }
 
+    if (this.phase === "draft") {
+      this.toolText.setText(this.formatDraftOffer());
+      return;
+    }
+
     this.toolText.setText(
-      `Tool: ${TOOL_LABELS[this.selectedTool]}\n` +
+      `Tool: ${this.toolLabel(this.selectedTool)}\n` +
         "[1] Path [2] Vegetation [3] Habitat [4] Lion [5] Elephant [6] Tortoise\n" +
         "[7] Water [8] Shelter [9] Enrichment [0] Erase  [Enter] Open Zoo",
     );
+  }
+
+  private formatDraftOffer(): string {
+    const cardLines = this.draftState.offer.map(
+      (card: Card, index: number) => `[${index + 1}] ${card.name} — ${card.description}`,
+    );
+    return `Year ${this.gameState.year} discovery: choose one card\n${cardLines.join("\n")}`;
   }
 
   private updateHud(): void {
@@ -191,6 +254,8 @@ export class MainScene extends Phaser.Scene {
     if (this.selectedTool === "erase") {
       removeAnimal(this.animals, cell);
       removeObject(this.layout, cell);
+    } else if (!this.isUnlocked(this.selectedTool)) {
+      // Tool has not been discovered through the card draft yet.
     } else if (this.isAnimalTool(this.selectedTool)) {
       placeAnimal(this.layout, this.animals, cell, this.selectedTool);
     } else {
