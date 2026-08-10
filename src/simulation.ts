@@ -1,4 +1,5 @@
 import { type AnimalLayout, calculateWelfare, listAnimals } from "./animals";
+import { type ResearchState, isUpgradePurchased } from "./research";
 import type { ZooLayout } from "./zoo";
 
 export interface GameState {
@@ -25,6 +26,11 @@ const UPKEEP_PER_ANIMAL = 20;
 const RESEARCH_PER_ANIMAL = 2;
 const CONSERVATION_PER_ANIMAL = 2;
 
+// Multipliers applied when the matching research upgrade has been purchased.
+const MARKETING_VISITOR_MULTIPLIER = 1.3;
+const FEEDING_UPKEEP_MULTIPLIER = 0.75;
+const CONSERVATION_PROGRAM_MULTIPLIER = 1.5;
+
 export function createInitialGameState(): GameState {
   return { year: 1, money: STARTING_MONEY, research: 0, conservation: 0 };
 }
@@ -45,15 +51,33 @@ function averageWelfareScore(zoo: ZooLayout, animals: AnimalLayout): number {
 
 // Simulates the current year without mutating state, so results can be
 // reviewed before the player chooses to advance to the next year.
-export function simulateYear(state: GameState, zoo: ZooLayout, animals: AnimalLayout): YearResult {
+export function simulateYear(
+  state: GameState,
+  zoo: ZooLayout,
+  animals: AnimalLayout,
+  research: ResearchState,
+): YearResult {
   const animalCount = listAnimals(animals).length;
   const welfare = averageWelfareScore(zoo, animals);
   const welfareFactor = welfare / 100;
 
-  const visitors = Math.round(animalCount * VISITORS_PER_ANIMAL * welfareFactor);
-  const income = visitors * TICKET_PRICE - animalCount * UPKEEP_PER_ANIMAL;
+  const visitorMultiplier = isUpgradePurchased(research, "marketing-campaign")
+    ? MARKETING_VISITOR_MULTIPLIER
+    : 1;
+  const upkeepMultiplier = isUpgradePurchased(research, "improved-feeding")
+    ? FEEDING_UPKEEP_MULTIPLIER
+    : 1;
+  const conservationMultiplier = isUpgradePurchased(research, "conservation-program")
+    ? CONSERVATION_PROGRAM_MULTIPLIER
+    : 1;
+
+  const visitors = Math.round(animalCount * VISITORS_PER_ANIMAL * welfareFactor * visitorMultiplier);
+  const upkeep = animalCount * UPKEEP_PER_ANIMAL * upkeepMultiplier;
+  const income = Math.round(visitors * TICKET_PRICE - upkeep);
   const researchGained = Math.round(animalCount * RESEARCH_PER_ANIMAL * welfareFactor);
-  const conservationGained = Math.round(animalCount * CONSERVATION_PER_ANIMAL * welfareFactor);
+  const conservationGained = Math.round(
+    animalCount * CONSERVATION_PER_ANIMAL * welfareFactor * conservationMultiplier,
+  );
 
   return {
     year: state.year,

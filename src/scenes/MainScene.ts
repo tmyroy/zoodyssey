@@ -20,6 +20,14 @@ import {
   startDraft,
 } from "../cards";
 import { CELL_SIZE, GRID_HEIGHT, GRID_WIDTH, createGridCells, getCellAtPosition } from "../grid";
+import {
+  type ResearchState,
+  UPGRADES,
+  canPurchaseUpgrade,
+  createResearchState,
+  isUpgradePurchased,
+  purchaseUpgrade,
+} from "../research";
 import { RUN_LENGTH_YEARS, type RunStatus, evaluateRun, isRunComplete } from "../run";
 import {
   type GameState,
@@ -75,6 +83,7 @@ export class MainScene extends Phaser.Scene {
   private animals!: AnimalLayout;
   private gameState!: GameState;
   private draftState!: DraftState;
+  private researchState!: ResearchState;
   private phase: Phase = "draft";
   private lastResult: YearResult | null = null;
   private selectedTool: Tool = "path";
@@ -126,6 +135,9 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-NINE", () => this.selectTool("enrichment"));
     this.input.keyboard?.on("keydown-ZERO", () => this.selectTool("erase"));
     this.input.keyboard?.on("keydown-ENTER", () => this.handleEnter());
+    this.input.keyboard?.on("keydown-Q", () => this.handleUpgradeKey(0));
+    this.input.keyboard?.on("keydown-W", () => this.handleUpgradeKey(1));
+    this.input.keyboard?.on("keydown-E", () => this.handleUpgradeKey(2));
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       this.handlePointerDown(pointer.x, pointer.y);
@@ -139,6 +151,7 @@ export class MainScene extends Phaser.Scene {
     this.animals = createAnimalLayout();
     this.gameState = createInitialGameState();
     this.draftState = createDraftState();
+    this.researchState = createResearchState();
     this.lastResult = null;
 
     this.startYearDraft();
@@ -181,9 +194,23 @@ export class MainScene extends Phaser.Scene {
     this.updateToolText();
   }
 
+  private handleUpgradeKey(index: number): void {
+    if (this.phase !== "build") {
+      return;
+    }
+    const upgrade = UPGRADES[index];
+    if (!upgrade) {
+      return;
+    }
+    const result = purchaseUpgrade(this.researchState, this.gameState, upgrade.id);
+    this.researchState = result.research;
+    this.gameState = result.game;
+    this.updateHud();
+  }
+
   private handleEnter(): void {
     if (this.phase === "build") {
-      this.lastResult = simulateYear(this.gameState, this.layout, this.animals);
+      this.lastResult = simulateYear(this.gameState, this.layout, this.animals, this.researchState);
       this.phase = "results";
     } else if (this.phase === "results" && this.lastResult) {
       this.gameState = applyYearResult(this.gameState, this.lastResult);
@@ -235,8 +262,21 @@ export class MainScene extends Phaser.Scene {
     this.toolText.setText(
       `Tool: ${this.toolLabel(this.selectedTool)}\n` +
         "[1] Path [2] Vegetation [3] Habitat [4] Lion [5] Elephant [6] Tortoise\n" +
-        "[7] Water [8] Shelter [9] Enrichment [0] Erase  [Enter] Open Zoo",
+        "[7] Water [8] Shelter [9] Enrichment [0] Erase  [Enter] Open Zoo\n" +
+        `${this.formatUpgradesLine()}`,
     );
+  }
+
+  private formatUpgradesLine(): string {
+    const keys = ["Q", "W", "E"];
+    const parts = UPGRADES.map((upgrade, index) => {
+      if (isUpgradePurchased(this.researchState, upgrade.id)) {
+        return `${upgrade.name} ✓`;
+      }
+      const affordable = canPurchaseUpgrade(this.researchState, this.gameState, upgrade);
+      return `[${keys[index]}] ${upgrade.name} (${upgrade.cost} research)${affordable ? "" : " - not enough research"}`;
+    });
+    return parts.join("  ");
   }
 
   private formatDraftOffer(): string {
