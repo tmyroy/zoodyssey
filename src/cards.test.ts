@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   CARD_POOL,
+  YEAR_ZERO_OFFER_SIZE,
+  YEAR_ZERO_PICK_LIMIT,
   availableCards,
   createDraftState,
   generateOffer,
@@ -8,6 +10,7 @@ import {
   isSpeciesUnlocked,
   pickCard,
   startDraft,
+  startYearZeroDraft,
 } from "./cards";
 
 function fixedRandom(...values: number[]): () => number {
@@ -97,5 +100,46 @@ describe("pickCard", () => {
     const before = state.unlockedCardIds.size;
     pickCard(state, state.offer[0].id);
     expect(state.unlockedCardIds.size).toBe(before);
+  });
+});
+
+describe("startYearZeroDraft", () => {
+  it("offers more cards than a normal year's draft", () => {
+    const yearZero = startYearZeroDraft(createDraftState(), fixedRandom(0));
+    const normalYear = startDraft(createDraftState(), fixedRandom(0));
+    expect(yearZero.offer.length).toBe(YEAR_ZERO_OFFER_SIZE);
+    expect(yearZero.offer.length).toBeGreaterThan(normalYear.offer.length);
+  });
+
+  it("allows picking multiple cards from the same offer", () => {
+    let state = startYearZeroDraft(createDraftState(), fixedRandom(0));
+    const [first, second, third] = state.offer;
+
+    state = pickCard(state, first.id);
+    expect(state.offer.length).toBe(YEAR_ZERO_OFFER_SIZE - 1);
+    expect(state.unlockedCardIds.has(first.id)).toBe(true);
+
+    state = pickCard(state, second.id);
+    expect(state.offer.length).toBe(YEAR_ZERO_OFFER_SIZE - 2);
+    expect(state.unlockedCardIds.has(second.id)).toBe(true);
+
+    state = pickCard(state, third.id);
+    expect(state.unlockedCardIds.size).toBe(YEAR_ZERO_PICK_LIMIT);
+  });
+
+  it("ends the draft after the pick limit is reached", () => {
+    let state = startYearZeroDraft(createDraftState(), fixedRandom(0));
+    for (let i = 0; i < YEAR_ZERO_PICK_LIMIT; i++) {
+      state = pickCard(state, state.offer[0].id);
+    }
+    expect(state.offer).toHaveLength(0);
+    expect(state.unlockedCardIds.size).toBe(YEAR_ZERO_PICK_LIMIT);
+  });
+
+  it("leaves the normal per-year draft picking exactly one card", () => {
+    const state = startDraft(createDraftState(), fixedRandom(0));
+    const next = pickCard(state, state.offer[0].id);
+    expect(next.offer).toHaveLength(0);
+    expect(next.unlockedCardIds.size).toBe(1);
   });
 });
