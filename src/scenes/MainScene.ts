@@ -5,6 +5,7 @@ import {
   type WelfareResult,
   ANIMAL_SPECIES,
   calculateWelfare,
+  canPlaceAnimal,
   createAnimalLayout,
   getAnimalAt,
   placeAnimal,
@@ -14,9 +15,8 @@ import {
   type Card,
   type DraftState,
   createDraftState,
-  isFeatureUnlocked,
-  isSpeciesUnlocked,
   pickCard,
+  playCard,
   startDraft,
   startYearZeroDraft,
 } from "../game/cards";
@@ -42,13 +42,16 @@ import {
 import {
   type ZooLayout,
   type ZooObjectType,
+  canPlaceObject,
   createZooLayout,
   getObjectAt,
   placeObject,
   removeObject,
 } from "../game/zoo";
 
-type Tool = ZooObjectType | AnimalSpeciesId | "erase";
+// What's currently selected to place on the grid: a specific hand card
+// (by id), erase mode, or nothing.
+type Selection = string | "erase" | null;
 type Phase = "draft" | "build" | "results" | "run-complete";
 
 // Layout: a side menu of tools sits left of the grid, a top bar shows status
@@ -85,30 +88,6 @@ const ANIMAL_COLORS: Record<AnimalSpeciesId, number> = {
   zebra: 0xe8e8e8,
 };
 
-const TOOL_LABELS: Record<Tool, string> = {
-  path: "Path",
-  vegetation: "Vegetation",
-  habitat: "Habitat",
-  water: "Water",
-  shelter: "Shelter",
-  enrichment: "Enrichment",
-  lion: "Lion",
-  elephant: "Elephant",
-  tortoise: "Tortoise",
-  giraffe: "Giraffe",
-  penguin: "Penguin",
-  bear: "Bear",
-  zebra: "Zebra",
-  erase: "Erase",
-};
-
-// Side menu order: basic tiles, erase, then every animal species.
-const SIDE_MENU_TOOLS: Tool[] = [
-  ...(Object.keys(OBJECT_COLORS) as ZooObjectType[]),
-  "erase",
-  ...(Object.keys(ANIMAL_SPECIES) as AnimalSpeciesId[]),
-];
-
 interface Button {
   bg: Phaser.GameObjects.Rectangle;
   label: Phaser.GameObjects.Text;
@@ -124,7 +103,7 @@ export class MainScene extends Phaser.Scene {
   private phase: Phase = "draft";
   private isYearZeroDraft = false;
   private lastResult: YearResult | null = null;
-  private selectedTool: Tool = "path";
+  private selection: Selection = null;
   private paused = false;
 
   private objectsGraphics!: Phaser.GameObjects.Graphics;
@@ -135,8 +114,10 @@ export class MainScene extends Phaser.Scene {
   private hudText!: Phaser.GameObjects.Text;
   private detailsText!: Phaser.GameObjects.Text;
   private actionButton!: Button;
-  private cardButtons: Button[] = [];
-  private toolButtons = new Map<Tool, Button>();
+  private eraseButton!: Button;
+  private draftCardButtons: Button[] = [];
+  private handCardButtons: Button[] = [];
+  private handSectionY = 0;
   private upgradeButtons = new Map<UpgradeId, Button>();
 
   private pauseOverlay!: Phaser.GameObjects.Rectangle;
@@ -277,16 +258,10 @@ export class MainScene extends Phaser.Scene {
 
   private bindKeyboard(): void {
     this.input.keyboard?.on("keydown-ESC", () => this.togglePause());
-    this.input.keyboard?.on("keydown-ONE", () => this.handleNumberKey(0, "path"));
-    this.input.keyboard?.on("keydown-TWO", () => this.handleNumberKey(1, "vegetation"));
-    this.input.keyboard?.on("keydown-THREE", () => this.handleNumberKey(2, "habitat"));
-    this.input.keyboard?.on("keydown-FOUR", () => this.selectTool("lion"));
-    this.input.keyboard?.on("keydown-FIVE", () => this.selectTool("elephant"));
-    this.input.keyboard?.on("keydown-SIX", () => this.selectTool("tortoise"));
-    this.input.keyboard?.on("keydown-SEVEN", () => this.selectTool("water"));
-    this.input.keyboard?.on("keydown-EIGHT", () => this.selectTool("shelter"));
-    this.input.keyboard?.on("keydown-NINE", () => this.selectTool("enrichment"));
-    this.input.keyboard?.on("keydown-ZERO", () => this.selectTool("erase"));
+    this.input.keyboard?.on("keydown-ONE", () => this.handleDraftPick(0));
+    this.input.keyboard?.on("keydown-TWO", () => this.handleDraftPick(1));
+    this.input.keyboard?.on("keydown-THREE", () => this.handleDraftPick(2));
+    this.input.keyboard?.on("keydown-ZERO", () => this.selectErase());
     this.input.keyboard?.on("keydown-ENTER", () => this.handleEnter());
     this.input.keyboard?.on("keydown-Q", () => this.handleUpgradeKey(0));
     this.input.keyboard?.on("keydown-W", () => this.handleUpgradeKey(1));
@@ -326,33 +301,18 @@ export class MainScene extends Phaser.Scene {
     return { bg, label: text, swatch };
   }
 
-  private swatchColorForTool(tool: Tool): number | undefined {
-    if (tool === "erase") {
-      return undefined;
-    }
-    return this.isAnimalTool(tool) ? ANIMAL_COLORS[tool] : OBJECT_COLORS[tool];
-  }
-
+  // Static part of the side menu: Erase, then research upgrades. The
+  // player's hand is dynamic (grows/shrinks as cards are drafted/played)
+  // and is rendered below this block — see updateHandCards().
   private buildSideMenu(): void {
     const x = 8;
     const width = SIDE_MENU_WIDTH - 16;
     let y = GRID_ORIGIN_Y + 8;
 
-    for (const tool of SIDE_MENU_TOOLS) {
-      const button = this.createButton(
-        x,
-        y,
-        width,
-        BUTTON_HEIGHT,
-        "",
-        () => this.selectTool(tool),
-        this.swatchColorForTool(tool),
-      );
-      this.toolButtons.set(tool, button);
-      y += BUTTON_HEIGHT + BUTTON_GAP;
-    }
+    const eraseButton = this.createButton(x, y, width, BUTTON_HEIGHT, "Erase", () => this.selectErase());
+    this.eraseButton = eraseButton;
+    y += BUTTON_HEIGHT + BUTTON_GAP + SECTION_GAP;
 
-    y += SECTION_GAP;
     for (const upgrade of UPGRADES) {
       const button = this.createButton(x, y, width, BUTTON_HEIGHT, "", () =>
         this.purchaseUpgrade(upgrade.id),
@@ -360,6 +320,9 @@ export class MainScene extends Phaser.Scene {
       this.upgradeButtons.set(upgrade.id, button);
       y += BUTTON_HEIGHT + BUTTON_GAP;
     }
+
+    y += SECTION_GAP;
+    this.handSectionY = y;
   }
 
   private startNewRun(): void {
@@ -372,16 +335,6 @@ export class MainScene extends Phaser.Scene {
 
     this.runYearZeroDraft();
     this.refresh();
-  }
-
-  // Keys 1-3 pick a draft card during the draft phase, or select a build
-  // tool otherwise.
-  private handleNumberKey(offerIndex: number, buildTool: Tool): void {
-    if (this.phase === "draft") {
-      this.handleDraftPick(offerIndex);
-    } else {
-      this.selectTool(buildTool);
-    }
   }
 
   private handleDraftPick(offerIndex: number): void {
@@ -412,11 +365,19 @@ export class MainScene extends Phaser.Scene {
     this.phase = this.draftState.offer.length > 0 ? "draft" : "build";
   }
 
-  private selectTool(tool: Tool): void {
+  private selectErase(): void {
     if (this.paused || this.phase !== "build") {
       return;
     }
-    this.selectedTool = tool;
+    this.selection = "erase";
+    this.refresh();
+  }
+
+  private selectHandCard(cardId: string): void {
+    if (this.paused || this.phase !== "build") {
+      return;
+    }
+    this.selection = cardId;
     this.refresh();
   }
 
@@ -460,21 +421,8 @@ export class MainScene extends Phaser.Scene {
     this.refresh();
   }
 
-  private isUnlocked(tool: Tool): boolean {
-    if (tool === "erase") {
-      return true;
-    }
-    return this.isAnimalTool(tool)
-      ? isSpeciesUnlocked(this.draftState, tool)
-      : isFeatureUnlocked(this.draftState, tool);
-  }
-
-  private toolLabel(tool: Tool): string {
-    return this.isUnlocked(tool) ? TOOL_LABELS[tool] : `${TOOL_LABELS[tool]} (locked)`;
-  }
-
-  private isAnimalTool(tool: Tool): tool is AnimalSpeciesId {
-    return tool in ANIMAL_SPECIES;
+  private isAnimalCard(card: Card): boolean {
+    return card.type === "animal";
   }
 
   private handlePointerDown(x: number, y: number): void {
@@ -487,16 +435,54 @@ export class MainScene extends Phaser.Scene {
       return;
     }
 
-    if (this.selectedTool === "erase") {
+    if (this.selection === "erase") {
       removeAnimal(this.animals, cell);
       removeObject(this.layout, cell);
-    } else if (!this.isUnlocked(this.selectedTool)) {
-      // Tool has not been discovered through the card draft yet.
-    } else if (this.isAnimalTool(this.selectedTool)) {
-      placeAnimal(this.layout, this.animals, cell, this.selectedTool);
-    } else {
-      placeObject(this.layout, cell, this.selectedTool);
+      this.refresh();
+      return;
     }
+
+    if (this.selection === null) {
+      return;
+    }
+
+    const card = this.draftState.hand.find((c) => c.id === this.selection);
+    if (!card) {
+      // Selection is stale (e.g. the last copy was already played elsewhere).
+      this.selection = null;
+      this.refresh();
+      return;
+    }
+
+    const canPlace = this.isAnimalCard(card)
+      ? canPlaceAnimal(this.layout, this.animals, cell)
+      : canPlaceObject(this.layout, cell);
+    if (!canPlace) {
+      // Invalid cell for this card — nothing is spent, card stays in hand.
+      return;
+    }
+
+    const result = playCard(this.draftState, this.gameState, card.id);
+    if (!result.playedCard) {
+      // Can't afford it (shouldn't normally happen — unaffordable cards
+      // aren't selectable — but guards against a stale selection).
+      return;
+    }
+
+    this.draftState = result.draft;
+    this.gameState = result.game;
+
+    if (this.isAnimalCard(card)) {
+      placeAnimal(this.layout, this.animals, cell, card.unlocks as AnimalSpeciesId);
+    } else {
+      placeObject(this.layout, cell, card.unlocks as ZooObjectType);
+    }
+
+    // Keep the same card selected if more copies remain in hand, so
+    // repeatable cards (e.g. placing several path tiles) don't require
+    // reselecting after every placement.
+    const stillInHand = this.draftState.hand.some((c) => c.id === card.id);
+    this.selection = stillInHand ? card.id : null;
 
     this.refresh();
   }
@@ -507,6 +493,7 @@ export class MainScene extends Phaser.Scene {
     this.updateTopBar();
     this.updateHud();
     this.updateSideMenu();
+    this.updateHandCards();
     this.renderObjects();
     this.renderAnimals();
   }
@@ -583,11 +570,24 @@ export class MainScene extends Phaser.Scene {
   private updateTopBar(): void {
     const labels: Record<Phase, string> = {
       draft: this.formatDraftStatus(),
-      build: `Tool: ${this.toolLabel(this.selectedTool)} — click the grid to build, then Open Zoo`,
+      build: this.formatBuildStatus(),
       results: "Reviewing year-end results",
       "run-complete": "Run complete",
     };
     this.topBarText.setText(labels[this.phase]);
+  }
+
+  private formatBuildStatus(): string {
+    if (this.selection === "erase") {
+      return "Erase selected — click the grid to remove, then Open Zoo";
+    }
+    if (this.selection) {
+      const card = this.draftState.hand.find((c) => c.id === this.selection);
+      if (card) {
+        return `Ready to play: ${card.name} (${card.cost} money) — click the grid, then Open Zoo`;
+      }
+    }
+    return "Select a card from your hand (or Erase), then click the grid to build";
   }
 
   private formatDraftStatus(): string {
@@ -610,13 +610,8 @@ export class MainScene extends Phaser.Scene {
   }
 
   private updateSideMenu(): void {
-    for (const [tool, button] of this.toolButtons) {
-      const locked = !this.isUnlocked(tool);
-      const selected = tool === this.selectedTool;
-      button.bg.setFillStyle(selected ? 0x4a7a4a : locked ? 0x262626 : 0x3a3a3a, 1);
-      button.label.setText(this.toolLabel(tool));
-      button.label.setColor(locked ? "#888888" : "#ffffff");
-    }
+    const eraseSelected = this.selection === "erase";
+    this.eraseButton.bg.setFillStyle(eraseSelected ? 0x4a7a4a : 0x3a3a3a, 1);
 
     for (const upgrade of UPGRADES) {
       const button = this.upgradeButtons.get(upgrade.id);
@@ -630,17 +625,17 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private clearCardButtons(): void {
-    for (const button of this.cardButtons) {
+  private clearDraftCardButtons(): void {
+    for (const button of this.draftCardButtons) {
       button.bg.destroy();
       button.label.destroy();
       button.swatch?.destroy();
     }
-    this.cardButtons = [];
+    this.draftCardButtons = [];
   }
 
   private updateBottomBar(needsSummaryLines: string[]): void {
-    this.clearCardButtons();
+    this.clearDraftCardButtons();
 
     if (this.phase === "draft") {
       this.actionButton.bg.setVisible(false);
@@ -675,12 +670,63 @@ export class MainScene extends Phaser.Scene {
         y,
         cardWidth,
         cardHeight,
-        `${card.name}\n${card.description}`,
+        `${card.name} (${card.cost}g)\n${card.description}`,
         () => this.handleDraftPick(index),
         this.swatchColorForCard(card),
       );
-      this.cardButtons.push(button);
+      this.draftCardButtons.push(button);
     });
+  }
+
+  // The player's hand: drafted cards not yet played, grouped by id so a
+  // repeatable card drafted several times shows as one row with a count.
+  private groupedHand(): { card: Card; count: number }[] {
+    const cardsById = new Map<string, Card>();
+    const counts = new Map<string, number>();
+    for (const card of this.draftState.hand) {
+      cardsById.set(card.id, card);
+      counts.set(card.id, (counts.get(card.id) ?? 0) + 1);
+    }
+    return [...cardsById.values()].map((card) => ({ card, count: counts.get(card.id)! }));
+  }
+
+  private clearHandButtons(): void {
+    for (const button of this.handCardButtons) {
+      button.bg.destroy();
+      button.label.destroy();
+      button.swatch?.destroy();
+    }
+    this.handCardButtons = [];
+  }
+
+  private updateHandCards(): void {
+    this.clearHandButtons();
+
+    const x = 8;
+    const width = SIDE_MENU_WIDTH - 16;
+    let y = this.handSectionY;
+
+    for (const { card, count } of this.groupedHand()) {
+      const affordable = this.gameState.money >= card.cost;
+      const selected = this.selection === card.id;
+      const label = `${card.name} (${card.cost}g)${count > 1 ? ` x${count}` : ""}`;
+
+      const button = this.createButton(
+        x,
+        y,
+        width,
+        BUTTON_HEIGHT,
+        label,
+        () => this.selectHandCard(card.id),
+        this.swatchColorForCard(card),
+      );
+      button.bg.setFillStyle(selected ? 0x4a7a4a : affordable ? 0x3a3a3a : 0x262626, 1);
+      if (!affordable) {
+        button.label.setColor("#888888");
+      }
+      this.handCardButtons.push(button);
+      y += BUTTON_HEIGHT + BUTTON_GAP;
+    }
   }
 
   private swatchColorForCard(card: Card): number {

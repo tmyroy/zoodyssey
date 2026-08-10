@@ -18,7 +18,7 @@ export interface YearResult {
   conservationGained: number;
 }
 
-export const STARTING_MONEY = 500;
+export const STARTING_MONEY = 10;
 
 const VISITORS_PER_ANIMAL = 15;
 const TICKET_PRICE = 12;

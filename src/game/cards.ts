@@ -1,21 +1,23 @@
 import type { AnimalSpeciesId } from "./animals";
 import cardData from "./cards.json";
+import type { GameState } from "./simulation";
 import type { ZooObjectType } from "./zoo";
 
 export type CardType = "animal" | "feature";
-
-export type UnlockableFeature = Exclude<ZooObjectType, "path" | "habitat">;
 
 export interface Card {
   id: string;
   type: CardType;
   name: string;
   description: string;
-  unlocks: AnimalSpeciesId | UnlockableFeature;
+  unlocks: AnimalSpeciesId | ZooObjectType;
+  // Money cost to play the card from hand.
+  cost: number;
+  // Repeatable cards can be drafted more than once across a run; unique
+  // cards (most animals, facilities) can only ever be drafted once.
+  repeatable: boolean;
 }
 
-// Path and habitat tiles are basic zoo infrastructure and are always
-// available; everything else must be discovered through the card draft.
 // Card content lives in cards.json so it can be edited without touching game logic.
 export const CARD_POOL: Card[] = cardData as Card[];
 
@@ -28,18 +30,22 @@ export const YEAR_ZERO_OFFER_SIZE = 6;
 export const YEAR_ZERO_PICK_LIMIT = 3;
 
 export interface DraftState {
-  unlockedCardIds: Set<string>;
+  // Cards drafted but not yet played. Repeatable cards may appear more than once.
+  hand: Card[];
+  // Unique cards already drafted, excluded from future offers. Repeatable
+  // cards are never added here, so they can keep being offered/drafted.
+  draftedUniqueCardIds: Set<string>;
   offer: Card[];
   // How many more cards can still be picked from the current offer.
   picksRemaining: number;
 }
 
 export function createDraftState(): DraftState {
-  return { unlockedCardIds: new Set(), offer: [], picksRemaining: 0 };
+  return { hand: [], draftedUniqueCardIds: new Set(), offer: [], picksRemaining: 0 };
 }
 
 export function availableCards(state: DraftState): Card[] {
-  return CARD_POOL.filter((card) => !state.unlockedCardIds.has(card.id));
+  return CARD_POOL.filter((card) => card.repeatable || !state.draftedUniqueCardIds.has(card.id));
 }
 
 function shuffle<T>(items: T[], random: () => number): T[] {
@@ -60,10 +66,11 @@ export function generateOffer(
 }
 
 // Starts a new year's draft by rolling a fresh offer from the remaining pool.
-// The offer is empty once every card has been discovered.
+// The offer is empty once every unique card has been discovered.
 export function startDraft(state: DraftState, random: () => number = Math.random): DraftState {
   return {
-    unlockedCardIds: state.unlockedCardIds,
+    hand: state.hand,
+    draftedUniqueCardIds: state.draftedUniqueCardIds,
     offer: generateOffer(state, random, OFFER_SIZE),
     picksRemaining: PICK_LIMIT,
   };
@@ -73,42 +80,66 @@ export function startDraft(state: DraftState, random: () => number = Math.random
 // multiple cards from before Year 1 begins.
 export function startYearZeroDraft(state: DraftState, random: () => number = Math.random): DraftState {
   return {
-    unlockedCardIds: state.unlockedCardIds,
+    hand: state.hand,
+    draftedUniqueCardIds: state.draftedUniqueCardIds,
     offer: generateOffer(state, random, YEAR_ZERO_OFFER_SIZE),
     picksRemaining: YEAR_ZERO_PICK_LIMIT,
   };
 }
 
-// Unlocks the chosen card. If picks remain and cards are still on offer,
-// the draft continues with the card removed from the offer; otherwise the
-// offer clears and the draft ends.
+// Adds the chosen card to the player's hand. If picks remain and cards are
+// still on offer, the draft continues with the card removed from the offer;
+// otherwise the offer clears and the draft ends.
 export function pickCard(state: DraftState, cardId: string): DraftState {
   const card = state.offer.find((c) => c.id === cardId);
   if (!card) {
     return state;
   }
 
-  const unlockedCardIds = new Set(state.unlockedCardIds);
-  unlockedCardIds.add(card.id);
+  const hand = [...state.hand, card];
+  const draftedUniqueCardIds = card.repeatable
+    ? state.draftedUniqueCardIds
+    : new Set(state.draftedUniqueCardIds).add(card.id);
 
   const remainingOffer = state.offer.filter((c) => c.id !== cardId);
   const picksRemaining = state.picksRemaining - 1;
   const draftContinues = picksRemaining > 0 && remainingOffer.length > 0;
 
   return {
-    unlockedCardIds,
+    hand,
+    draftedUniqueCardIds,
     offer: draftContinues ? remainingOffer : [],
     picksRemaining: draftContinues ? picksRemaining : 0,
   };
 }
 
-export function isSpeciesUnlocked(state: DraftState, species: AnimalSpeciesId): boolean {
-  return state.unlockedCardIds.has(`animal-${species}`);
+export function canPlayCard(state: DraftState, game: GameState, cardId: string): boolean {
+  const card = state.hand.find((c) => c.id === cardId);
+  return card !== undefined && game.money >= card.cost;
 }
 
-export function isFeatureUnlocked(state: DraftState, feature: ZooObjectType): boolean {
-  if (feature === "path" || feature === "habitat") {
-    return true;
+export interface PlayCardResult {
+  draft: DraftState;
+  game: GameState;
+  // The played card, or null if it wasn't in hand or couldn't be afforded
+  // (the caller should treat that as a no-op).
+  playedCard: Card | null;
+}
+
+// Spends money to play a card out of hand. The caller is responsible for
+// turning the returned card into the actual zoo object (placed tile/animal)
+// once it knows placement will succeed.
+export function playCard(state: DraftState, game: GameState, cardId: string): PlayCardResult {
+  const index = state.hand.findIndex((c) => c.id === cardId);
+  const card = index === -1 ? undefined : state.hand[index];
+  if (!card || game.money < card.cost) {
+    return { draft: state, game, playedCard: null };
   }
-  return state.unlockedCardIds.has(`feature-${feature}`);
+
+  const hand = [...state.hand.slice(0, index), ...state.hand.slice(index + 1)];
+  return {
+    draft: { ...state, hand },
+    game: { ...game, money: game.money - card.cost },
+    playedCard: card,
+  };
 }
