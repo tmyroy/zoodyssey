@@ -59,9 +59,9 @@ export const GRID_ORIGIN_Y = TOP_BAR_HEIGHT;
 export const CANVAS_WIDTH = SIDE_MENU_WIDTH + GRID_WIDTH * CELL_SIZE;
 export const CANVAS_HEIGHT = TOP_BAR_HEIGHT + GRID_HEIGHT * CELL_SIZE + BOTTOM_BAR_HEIGHT;
 
-const BUTTON_HEIGHT = 32;
-const BUTTON_GAP = 6;
-const SECTION_GAP = 16;
+const BUTTON_HEIGHT = 28;
+const BUTTON_GAP = 4;
+const SECTION_GAP = 10;
 
 const OBJECT_COLORS: Record<ZooObjectType, number> = {
   path: 0xc2b280,
@@ -76,6 +76,10 @@ const ANIMAL_COLORS: Record<AnimalSpeciesId, number> = {
   lion: 0xe0a030,
   elephant: 0x8f8f9a,
   tortoise: 0x5aa06a,
+  giraffe: 0xd9b13c,
+  penguin: 0x2f3a4a,
+  bear: 0x6b4a35,
+  zebra: 0xe8e8e8,
 };
 
 const TOOL_LABELS: Record<Tool, string> = {
@@ -88,6 +92,10 @@ const TOOL_LABELS: Record<Tool, string> = {
   lion: "Lion",
   elephant: "Elephant",
   tortoise: "Tortoise",
+  giraffe: "Giraffe",
+  penguin: "Penguin",
+  bear: "Bear",
+  zebra: "Zebra",
   erase: "Erase",
 };
 

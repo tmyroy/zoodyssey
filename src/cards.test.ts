@@ -22,6 +22,15 @@ describe("draft state", () => {
     expect(availableCards(state)).toHaveLength(CARD_POOL.length);
   });
 
+  it("has a card pool larger than the original 7", () => {
+    expect(CARD_POOL.length).toBeGreaterThan(7);
+  });
+
+  it("has a unique id for every card", () => {
+    const ids = CARD_POOL.map((card) => card.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it("basic tiles are always available even before any cards are drafted", () => {
     const state = createDraftState();
     expect(isFeatureUnlocked(state, "path")).toBe(true);
