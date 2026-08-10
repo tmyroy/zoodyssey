@@ -83,6 +83,18 @@ export function getAnimalAt(layout: AnimalLayout, cell: GridCell): AnimalSpecies
   return layout.animals.get(cellKey(cell));
 }
 
+export interface AnimalPlacement {
+  cell: GridCell;
+  species: AnimalSpeciesId;
+}
+
+export function listAnimals(layout: AnimalLayout): AnimalPlacement[] {
+  return [...layout.animals.entries()].map(([key, species]) => {
+    const [col, row] = key.split(",").map(Number);
+    return { cell: { col, row }, species };
+  });
+}
+
 export function canPlaceAnimal(zoo: ZooLayout, animals: AnimalLayout, cell: GridCell): boolean {
   return getObjectAt(zoo, cell) === "habitat" && !animals.animals.has(cellKey(cell));
 }
