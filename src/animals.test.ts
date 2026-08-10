@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANIMAL_SPECIES,
+  type AnimalSpeciesId,
   type WelfareResult,
   calculateWelfare,
   canPlaceAnimal,
@@ -143,5 +145,24 @@ describe("calculateWelfare", () => {
 
     expect(needFor(after, "water").actual).toBe(1);
     expect(after.score).toBeGreaterThan(before.score);
+  });
+});
+
+describe("ANIMAL_SPECIES roster", () => {
+  it("offers more than the original three species", () => {
+    expect(Object.keys(ANIMAL_SPECIES).length).toBeGreaterThan(3);
+  });
+
+  it("gives every species weights that sum to 100", () => {
+    for (const species of Object.values(ANIMAL_SPECIES)) {
+      const totalWeight = Object.values(species.weights).reduce((sum, w) => sum + w, 0);
+      expect(totalWeight).toBe(100);
+    }
+  });
+
+  it("gives each new species a distinct habitat need profile", () => {
+    const newSpecies: AnimalSpeciesId[] = ["giraffe", "penguin", "bear", "zebra"];
+    const profiles = newSpecies.map((id) => JSON.stringify(ANIMAL_SPECIES[id].weights));
+    expect(new Set(profiles).size).toBe(newSpecies.length);
   });
 });

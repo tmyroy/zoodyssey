@@ -1,7 +1,7 @@
 import type { GridCell } from "./grid";
 import { type ZooLayout, type ZooObjectType, getObjectAt } from "./zoo";
 
-export type AnimalSpeciesId = "lion" | "elephant" | "tortoise";
+export type AnimalSpeciesId = "lion" | "elephant" | "tortoise" | "giraffe" | "penguin" | "bear" | "zebra";
 
 export type NeedKey = "space" | "vegetation" | "water" | "shelter" | "enrichment";
 
@@ -34,6 +34,30 @@ export const ANIMAL_SPECIES: Record<AnimalSpeciesId, AnimalSpecies> = {
     name: "Tortoise",
     requirements: { space: 4, vegetation: 2, water: 1, shelter: 2, enrichment: 1 },
     weights: { space: 20, vegetation: 20, water: 10, shelter: 35, enrichment: 15 },
+  },
+  giraffe: {
+    id: "giraffe",
+    name: "Giraffe",
+    requirements: { space: 8, vegetation: 3, water: 1, shelter: 1, enrichment: 1 },
+    weights: { space: 40, vegetation: 25, water: 10, shelter: 10, enrichment: 15 },
+  },
+  penguin: {
+    id: "penguin",
+    name: "Penguin",
+    requirements: { space: 4, vegetation: 1, water: 3, shelter: 2, enrichment: 1 },
+    weights: { space: 15, vegetation: 5, water: 45, shelter: 20, enrichment: 15 },
+  },
+  bear: {
+    id: "bear",
+    name: "Bear",
+    requirements: { space: 7, vegetation: 2, water: 2, shelter: 3, enrichment: 3 },
+    weights: { space: 20, vegetation: 10, water: 15, shelter: 30, enrichment: 25 },
+  },
+  zebra: {
+    id: "zebra",
+    name: "Zebra",
+    requirements: { space: 6, vegetation: 2, water: 1, shelter: 1, enrichment: 1 },
+    weights: { space: 35, vegetation: 30, water: 15, shelter: 10, enrichment: 10 },
   },
 };
 
