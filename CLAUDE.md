@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-This repository currently contains only design/planning docs (`README.md`, `docs/game-design.md`) — no source code, `package.json`, or build tooling exists yet. When the first code is added, set up the toolchain described below (TypeScript + Phaser + Vite + Vitest) and add real build/lint/test commands here.
+The prototype is in active development. TypeScript + Phaser + Vite + Vitest toolchain is set up; run `npm run typecheck`, `npm test`, and `npm run build` (see `package.json` for the full script list).
 
 ## What this is
 
-Zoodyssey is a prototype single-player roguelite zoo management game, inspired by Zoo Tycoon/Planet Zoo, card-based board games (Ark Nova, Terraforming Mars), and roguelites (Slay the Spire, Against the Storm). See `docs/game-design.md` for the full game design (core loop, animals, resources, cards, progression). Read it before implementing gameplay systems — it defines what makes a change "in scope."
+Zoodyssey is a prototype single-player roguelite deckbuilder about building a zoo, inspired by Zoo Tycoon/Planet Zoo, card-based board games (Ark Nova, Terraforming Mars), and roguelites/deckbuilders (Slay the Spire, Against the Storm). Cards are drafted into a deck, drawn from each year in limited number, and played at a cost to place habitats and animals and hire staff. See `docs/game-design.md` for the full game design (core loop, cards, habitats, animals, resources, progression). Read it before implementing gameplay systems — it defines what makes a change "in scope."
 
-Tech stack (once code exists): TypeScript, Phaser, Vite, Vitest.
+Tech stack: TypeScript, Phaser, Vite, Vitest.
 
 ## Development philosophy
 
