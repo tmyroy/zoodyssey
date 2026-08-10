@@ -12,6 +12,13 @@ import {
 } from "../animals";
 import { CELL_SIZE, GRID_HEIGHT, GRID_WIDTH, createGridCells, getCellAtPosition } from "../grid";
 import {
+  type GameState,
+  type YearResult,
+  applyYearResult,
+  createInitialGameState,
+  simulateYear,
+} from "../simulation";
+import {
   type ZooLayout,
   type ZooObjectType,
   createZooLayout,
@@ -21,6 +28,7 @@ import {
 } from "../zoo";
 
 type Tool = ZooObjectType | AnimalSpeciesId | "erase";
+type Phase = "build" | "results";
 
 export const DETAILS_PANEL_HEIGHT = 130;
 
@@ -55,11 +63,15 @@ const TOOL_LABELS: Record<Tool, string> = {
 export class MainScene extends Phaser.Scene {
   private layout!: ZooLayout;
   private animals!: AnimalLayout;
+  private gameState!: GameState;
+  private phase: Phase = "build";
+  private lastResult: YearResult | null = null;
   private selectedTool: Tool = "path";
   private objectsGraphics!: Phaser.GameObjects.Graphics;
   private animalsGraphics!: Phaser.GameObjects.Graphics;
   private welfareTexts: Phaser.GameObjects.Text[] = [];
   private toolText!: Phaser.GameObjects.Text;
+  private hudText!: Phaser.GameObjects.Text;
   private detailsText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -69,6 +81,7 @@ export class MainScene extends Phaser.Scene {
   create(): void {
     this.layout = createZooLayout(GRID_WIDTH, GRID_HEIGHT);
     this.animals = createAnimalLayout();
+    this.gameState = createInitialGameState();
 
     this.drawGrid();
     this.objectsGraphics = this.add.graphics();
@@ -80,7 +93,14 @@ export class MainScene extends Phaser.Scene {
       backgroundColor: "#000000aa",
       padding: { x: 4, y: 2 },
     });
-    this.updateToolText();
+
+    this.hudText = this.add.text(GRID_WIDTH * CELL_SIZE - 180, 4, "", {
+      fontSize: "14px",
+      color: "#ffffff",
+      backgroundColor: "#000000aa",
+      padding: { x: 4, y: 2 },
+      align: "right",
+    });
 
     this.detailsText = this.add.text(4, GRID_HEIGHT * CELL_SIZE + 4, "", {
       fontSize: "12px",
@@ -98,24 +118,59 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-EIGHT", () => this.selectTool("shelter"));
     this.input.keyboard?.on("keydown-NINE", () => this.selectTool("enrichment"));
     this.input.keyboard?.on("keydown-ZERO", () => this.selectTool("erase"));
+    this.input.keyboard?.on("keydown-ENTER", () => this.handleEnter());
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       this.handlePointerDown(pointer.x, pointer.y);
     });
 
+    this.updateToolText();
+    this.updateHud();
     this.renderAnimals();
   }
 
   private selectTool(tool: Tool): void {
+    if (this.phase !== "build") {
+      return;
+    }
     this.selectedTool = tool;
     this.updateToolText();
   }
 
+  private handleEnter(): void {
+    if (this.phase === "build") {
+      this.lastResult = simulateYear(this.gameState, this.layout, this.animals);
+      this.phase = "results";
+    } else if (this.lastResult) {
+      this.gameState = applyYearResult(this.gameState, this.lastResult);
+      this.lastResult = null;
+      this.phase = "build";
+    }
+
+    this.updateToolText();
+    this.updateHud();
+    this.renderAnimals();
+  }
+
   private updateToolText(): void {
+    if (this.phase === "results") {
+      this.toolText.setText("Reviewing year-end results\n[Enter] Start next year");
+      return;
+    }
+
     this.toolText.setText(
       `Tool: ${TOOL_LABELS[this.selectedTool]}\n` +
         "[1] Path [2] Vegetation [3] Habitat [4] Lion [5] Elephant [6] Tortoise\n" +
-        "[7] Water [8] Shelter [9] Enrichment [0] Erase",
+        "[7] Water [8] Shelter [9] Enrichment [0] Erase  [Enter] Open Zoo",
+    );
+  }
+
+  private updateHud(): void {
+    this.hudText.setText(
+      `Year ${this.gameState.year}\n` +
+        `Money $${this.gameState.money}\n` +
+        `Research ${this.gameState.research}\n` +
+        `Conservation ${this.gameState.conservation}`,
     );
   }
 
@@ -124,6 +179,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   private handlePointerDown(x: number, y: number): void {
+    if (this.phase !== "build") {
+      return;
+    }
+
     const cell = getCellAtPosition(x, y, GRID_WIDTH, GRID_HEIGHT);
     if (!cell) {
       return;
@@ -217,8 +276,23 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
-    this.detailsText.setText(
-      summaryLines.length > 0 ? summaryLines.join("\n") : "Place an animal on a habitat tile.",
+    this.detailsText.setText(this.formatDetailsPanel(summaryLines));
+  }
+
+  private formatDetailsPanel(needsSummaryLines: string[]): string {
+    if (this.phase === "results" && this.lastResult) {
+      return this.formatYearSummary(this.lastResult);
+    }
+    return needsSummaryLines.length > 0
+      ? needsSummaryLines.join("\n")
+      : "Place an animal on a habitat tile.";
+  }
+
+  private formatYearSummary(result: YearResult): string {
+    return (
+      `Year ${result.year} results: ${result.visitors} visitors, ` +
+      `income $${result.income}, average welfare ${result.averageWelfare}%\n` +
+      `+${result.researchGained} research, +${result.conservationGained} conservation`
     );
   }
 
