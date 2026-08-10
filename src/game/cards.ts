@@ -1,4 +1,5 @@
 import type { AnimalSpeciesId } from "./animals";
+import cardData from "./cards.json";
 import type { ZooObjectType } from "./zoo";
 
 export type CardType = "animal" | "feature";
@@ -15,79 +16,8 @@ export interface Card {
 
 // Path and habitat tiles are basic zoo infrastructure and are always
 // available; everything else must be discovered through the card draft.
-export const CARD_POOL: Card[] = [
-  { id: "animal-lion", type: "animal", name: "Lion", description: "Unlocks the lion.", unlocks: "lion" },
-  {
-    id: "animal-elephant",
-    type: "animal",
-    name: "Elephant",
-    description: "Unlocks the elephant.",
-    unlocks: "elephant",
-  },
-  {
-    id: "animal-tortoise",
-    type: "animal",
-    name: "Tortoise",
-    description: "Unlocks the tortoise.",
-    unlocks: "tortoise",
-  },
-  {
-    id: "animal-giraffe",
-    type: "animal",
-    name: "Giraffe",
-    description: "Unlocks the giraffe.",
-    unlocks: "giraffe",
-  },
-  {
-    id: "animal-penguin",
-    type: "animal",
-    name: "Penguin",
-    description: "Unlocks the penguin.",
-    unlocks: "penguin",
-  },
-  {
-    id: "animal-bear",
-    type: "animal",
-    name: "Bear",
-    description: "Unlocks the bear.",
-    unlocks: "bear",
-  },
-  {
-    id: "animal-zebra",
-    type: "animal",
-    name: "Zebra",
-    description: "Unlocks the zebra.",
-    unlocks: "zebra",
-  },
-  {
-    id: "feature-vegetation",
-    type: "feature",
-    name: "Vegetation",
-    description: "Unlocks vegetation tiles.",
-    unlocks: "vegetation",
-  },
-  {
-    id: "feature-water",
-    type: "feature",
-    name: "Water Feature",
-    description: "Unlocks water tiles.",
-    unlocks: "water",
-  },
-  {
-    id: "feature-shelter",
-    type: "feature",
-    name: "Shelter",
-    description: "Unlocks shelter tiles.",
-    unlocks: "shelter",
-  },
-  {
-    id: "feature-enrichment",
-    type: "feature",
-    name: "Enrichment",
-    description: "Unlocks enrichment tiles.",
-    unlocks: "enrichment",
-  },
-];
+// Card content lives in cards.json so it can be edited without touching game logic.
+export const CARD_POOL: Card[] = cardData as Card[];
 
 const OFFER_SIZE = 3;
 const PICK_LIMIT = 1;
